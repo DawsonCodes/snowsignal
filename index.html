@@ -8,11 +8,22 @@
     name="description"
     content="SnowSignal — a transparent snow-day and school-delay predictor. Estimates school closure and delay chances from live weather data. Free, private, no sign-up."
   />
+  <meta name="theme-color" content="#0b1220" />
+  <!-- Social sharing cards (no external assets; the SVG mark doubles as the image). -->
+  <meta property="og:title" content="SnowSignal — Know before the bell." />
+  <meta property="og:description" content="A transparent, client-only snow-day and school-delay estimator. Free, private, no sign-up." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
   <title>SnowSignal — Know before the bell.</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./css/main.css" />
 </head>
 <body>
+  <noscript>
+    <p class="noscript-note">SnowSignal needs JavaScript to fetch the forecast and run its
+    estimate — everything happens in your browser, nothing is sent to a server of ours.</p>
+  </noscript>
   <a class="skip-link" href="#main">Skip to content</a>
 
   <!-- Seasonal ambient layer (decorative; never captures clicks). -->
@@ -187,6 +198,7 @@
               <span class="chip" id="chip-confidence"></span>
             </div>
             <p class="recommendation" id="recommendation"></p>
+            <ul class="drivers" id="drivers" hidden aria-label="Top drivers of this estimate"></ul>
             <p class="gate-note" id="gate-note" hidden></p>
             <div class="result-actions">
               <button type="button" id="copy-btn" class="ghost-btn">
@@ -215,7 +227,7 @@
               <h3 class="section-title wd-timeline-title">Hourly outlook</h3>
               <div class="timeline-row">
                 <button type="button" class="timeline-arrow" id="timeline-prev" aria-label="Scroll the hourly forecast earlier" tabindex="-1">‹</button>
-                <div id="timeline" class="timeline" role="img" aria-label="Hourly snow and temperature forecast"></div>
+                <div id="timeline" class="timeline" role="img" tabindex="0" aria-label="Hourly snow and temperature forecast"></div>
                 <button type="button" class="timeline-arrow" id="timeline-next" aria-label="Scroll the hourly forecast later" tabindex="-1">›</button>
               </div>
             </details>
@@ -347,28 +359,44 @@
 
         <!-- Data -->
         <section class="settings-panel-tab" id="panel-data" role="tabpanel" aria-labelledby="tab-data" hidden>
+          <p class="hint">Everything SnowSignal saves lives only in this browser.</p>
           <div class="settings-actions">
             <button type="button" class="ghost-btn" id="clear-recent">Clear recent locations</button>
             <button type="button" class="ghost-btn" id="clear-saved">Clear saved locations</button>
             <button type="button" class="ghost-btn" id="reset-school">Reset school settings</button>
             <button type="button" class="ghost-btn" id="reset-counter">Reset estimate counter</button>
-            <button type="button" class="ghost-btn danger" id="reset-prefs">Reset all preferences</button>
+          </div>
+          <div class="settings-danger">
+            <p class="settings-danger-label">These can’t be undone</p>
+            <div class="settings-actions">
+              <button type="button" class="ghost-btn danger" id="reset-prefs">Reset all preferences</button>
+            </div>
           </div>
         </section>
 
         <!-- About -->
         <section class="settings-panel-tab" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+          <div class="about-hero">
+            <img class="about-icon" src="./favicon.svg" alt="" width="44" height="44" />
+            <div>
+              <span class="app-version" id="app-version">SnowSignal</span>
+              <p class="about-tagline">Know before the bell.</p>
+            </div>
+          </div>
+          <p class="about-blurb">
+            A transparent, deterministic snow-day and school-delay estimator. Client-only,
+            no tracking — weather by Open-Meteo, US winter alerts by NWS. Every result is an
+            estimate, never an official closure announcement.
+          </p>
           <p class="settings-about">
-            <span class="app-version" id="app-version">SnowSignal</span>
             <span class="settings-links">
               <a id="license-link" href="https://github.com/DawsonCodes/snowsignal/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
               ·
               <a id="source-link" href="https://github.com/DawsonCodes/snowsignal" target="_blank" rel="noopener">View source</a>
-            </span>
-            <span class="settings-links">
-              <a id="changelog-link" href="https://github.com/DawsonCodes/snowsignal/blob/main/CHANGELOG.md" target="_blank" rel="noopener">View changelog</a>
               ·
-              <a id="roadmap-link" href="https://github.com/DawsonCodes/snowsignal/blob/main/ROADMAP.md" target="_blank" rel="noopener">View roadmap</a>
+              <a id="changelog-link" href="https://github.com/DawsonCodes/snowsignal/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+              ·
+              <a id="roadmap-link" href="https://github.com/DawsonCodes/snowsignal/blob/main/ROADMAP.md" target="_blank" rel="noopener">Roadmap</a>
             </span>
             <span class="settings-counter" id="about-counter"></span>
           </p>

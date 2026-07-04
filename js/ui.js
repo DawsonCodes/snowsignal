@@ -196,8 +196,11 @@ export function renderResult(result, meta) {
   const confChip = $("chip-confidence");
   confChip.textContent = `${result.confidence} confidence`;
   confChip.className = `chip confidence-${result.confidence}`;
+  confChip.title = CONFIDENCE_HELP[result.confidence] || "";
 
   $("recommendation").textContent = result.recommendation;
+
+  renderDrivers(result.drivers || []);
 
   const gate = $("gate-note");
   if (gate) {
@@ -235,14 +238,51 @@ export function renderResult(result, meta) {
   }
 }
 
+// Plain-language meaning of each confidence label (shown as a tooltip).
+const CONFIDENCE_HELP = {
+  high: "The signals are clear-cut and agree with each other.",
+  medium: "A reasonable read, but some signals are mixed or incomplete.",
+  low: "Borderline or incomplete signals — check official sources.",
+};
+
+/** Render the plain-language "top drivers" line under the recommendation. */
+function renderDrivers(drivers) {
+  const wrap = $("drivers");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  if (!drivers.length) {
+    hide(wrap);
+    return;
+  }
+  for (const text of drivers) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    wrap.appendChild(li);
+  }
+  show(wrap);
+}
+
 function renderFactors(factors, { entrance }) {
   const list = $("factors");
   list.innerHTML = "";
-  // Show the factors that actually move the needle, biggest first.
-  const sorted = [...factors].sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
+  // Split into what pushed the estimate up vs down, biggest movers first, with a
+  // small heading over each group so direction never relies on color alone.
+  const moving = factors.filter((f) => Math.abs(f.points) >= 0.5);
+  const raising = moving
+    .filter((f) => f.points > 0)
+    .sort((a, b) => b.points - a.points);
+  const lowering = moving
+    .filter((f) => f.points < 0)
+    .sort((a, b) => a.points - b.points);
+
   let shown = 0;
-  for (const f of sorted) {
-    if (Math.abs(f.points) < 0.5) continue;
+  const addHeading = (text) => {
+    const li = document.createElement("li");
+    li.className = "factor-heading";
+    li.textContent = text;
+    list.appendChild(li);
+  };
+  const addFactor = (f) => {
     const li = document.createElement("li");
     li.className = `factor ${f.direction}`;
     const widthPct = Math.min(100, (Math.abs(f.points) / f.maxPoints) * 100);
@@ -270,6 +310,15 @@ function renderFactors(factors, { entrance }) {
       list.appendChild(li);
     }
     shown++;
+  };
+
+  if (raising.length) {
+    addHeading("Raising the estimate");
+    raising.forEach(addFactor);
+  }
+  if (lowering.length) {
+    addHeading("Lowering the estimate");
+    lowering.forEach(addFactor);
   }
 }
 

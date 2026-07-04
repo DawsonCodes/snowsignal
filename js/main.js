@@ -744,6 +744,17 @@ function init() {
     else if (state.place) loadPlace(state.place);
   });
 
+  // "/" focuses the search box from anywhere outside a text field or the modal.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    const typing =
+      t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+    if (typing || !$("settings-panel").hidden) return;
+    e.preventDefault();
+    $("location").focus();
+  });
+
   // Desktop-only hourly scroll arrows (touch users swipe; smooth via CSS).
   const scrollTimelineBy = (dx) => {
     const t = $("timeline");
