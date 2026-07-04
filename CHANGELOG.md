@@ -1,7 +1,49 @@
 # Changelog
 
-All notable changes to SnowSignal are documented here. This project is in **public
-beta**; versions follow [semantic versioning](https://semver.org) with pre-release tags.
+All notable changes to SnowSignal are documented here. Versions follow
+[semantic versioning](https://semver.org).
+
+## [1.0.0] — 2026-07-04
+
+The first **stable release**. SnowSignal remains what it has been through the betas —
+a transparent, deterministic, fully static, client-only estimator with no tracking —
+now with a smarter engine, a finished UI, and a full accessibility and compatibility pass.
+Every result is still an estimate, never an official closure announcement.
+
+### Engine
+- **Refreeze detection** — a wet prior evening followed by a below-freezing commute now
+  registers as black-ice risk: it raises the closure estimate, feeds the delay profile
+  strongly (the textbook "2-hour delay to let crews treat roads"), and counts as a real
+  winter hazard in the plausibility gate.
+- **Trend into school start** — a storm winding down before buses roll now *lowers* the
+  closure estimate (crews get a clearing window) and nudges toward a delay instead; one
+  ramping up into the commute raises it. Gated by storm presence so clear days are unaffected.
+- **Snowfall intensity** — heavy hourly bursts (approaching 1"/hr) score higher than the
+  same total spread thinly, because plows can't keep up with bursts.
+- **Sharper confidence** — confidence now drops when the precipitation type is genuinely
+  ambiguous near the freezing line, and rises when several independent strong signals
+  (snow totals, ice, an official alert, dangerous cold) agree. Tooltips explain what each
+  confidence label means.
+- **Plain-language drivers** — each result surfaces the top 2–4 reasons behind the number,
+  including the biggest factor holding it *down*.
+- **Window fix** — the 5 AM and 9 AM boundary hours were counted in two forecast windows
+  at once; buckets are now disjoint (overnight 6 PM–4:59 AM, commute 5–8:59 AM, daytime
+  9 AM–5 PM).
+
+### UI
+- Factor breakdown is now grouped under **"Raising the estimate" / "Lowering the
+  estimate"** headings, so direction never relies on color alone.
+- Probability dials gained a subtle halo; the wordmark a restrained accent sweep.
+- Settings modal: more breathing room between groups, clearly marked selected pills
+  (check mark + stronger ring), a separated **"can't be undone"** zone for destructive
+  actions, and a finished About tab with the app mark, tagline, and description.
+- The hourly timeline is keyboard-focusable and scrollable.
+- Added a static `manifest.webmanifest` + theme-color and social-sharing meta tags, a
+  `<noscript>` notice, and a `/` shortcut that focuses search.
+
+### Fixed / cleaned
+- Removed the orphaned `atm-rise` keyframe left behind by the beta.4 atmosphere work.
+- Audited for stale code, debug output, and dead selectors (now guarded by a test).
 
 ## [1.0.0-beta.4] — 2026-06-06
 

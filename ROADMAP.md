@@ -27,16 +27,20 @@ a wider tabbed Settings modal, no unnecessary animation replays, result date/fre
 a collapsible Weather details panel, a device-local estimate counter, friendlier loading/error
 states, and open-source (MIT) documentation. See [CHANGELOG.md](CHANGELOG.md).
 
-## v1.0.0-beta.4 — current
-The last planned visual-polish beta (not a stable release) on the same engine: a Seasonal palette
-system (Auto/Winter/Spring/Summer/Fall/Custom) with location-aware Auto and a safe accent range,
+## v1.0.0-beta.4
+The last visual-polish beta on the same engine: a Seasonal palette system
+(Auto/Winter/Spring/Summer/Fall/Custom) with location-aware Auto and a safe accent range,
 subtle time-of-day ambient intensity under Auto, refined per-season atmosphere, Settings-tab motion
 polish, smoother/subtler hourly-forecast scrolling with optional desktop arrows, and a clearer
 seasonal empty state. See [CHANGELOG.md](CHANGELOG.md).
 
-## v1.0.0 — stable
-Promote to a stable release after bug fixes and real-world testing across a range
-of locations, devices, and storms.
+## v1.0.0 — current, stable
+The first stable release: a smarter engine (refreeze/black-ice detection, trend into the
+commute, snowfall intensity, sharper confidence, plain-language drivers), a finished UI
+(grouped factor breakdown, polished settings and About, web-app manifest), and a full
+accessibility, compatibility, and code-quality pass. Still a transparent estimate — never
+official closure data — client-only, no tracking, MIT licensed.
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## v1.1.0
 - Optional **local** outcome feedback ("was school actually closed?") stored only on-device

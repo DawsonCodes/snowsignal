@@ -38,7 +38,7 @@ import * as ui from "./ui.js";
 
 const { $ } = ui;
 
-const APP_VERSION = "1.0.0-beta.4";
+const APP_VERSION = "1.0.0";
 
 // The last user action, so the error-state Retry button can re-run it.
 let lastAction = null;
