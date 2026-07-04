@@ -27,6 +27,16 @@
   50% { transform: translateY(-2px) rotate(4deg); }
 }
 
+/* Subtle accent sweep across the wordmark (only where text-clipping is safe). */
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .brand h1 {
+    background: linear-gradient(100deg, var(--text) 55%, var(--accent-strong));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
 .subtitle {
   font-size: 0.82rem;
   color: var(--muted);
@@ -381,6 +391,8 @@ input[type="range"]::-moz-range-thumb {
   stroke-dasharray: 326.7;
   stroke-dashoffset: 326.7;
   transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s ease;
+  /* A faint halo makes the ring read as the primary object on both themes. */
+  filter: drop-shadow(0 0 4px var(--accent-ring));
 }
 
 #dial-delay .dial-fill {
@@ -483,6 +495,29 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.74rem;
   color: var(--muted);
   margin-left: auto;
+}
+
+/* Plain-language top drivers under the recommendation. */
+.drivers {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.drivers li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.drivers li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent-strong);
 }
 
 /* Plausibility-gate explanation (estimate resolved to 0%). */
@@ -668,6 +703,19 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Group headings: direction is stated in text, never by color alone. */
+.factor-heading {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.factor-heading:first-child {
+  margin-top: 0;
 }
 
 .factor {
@@ -1044,8 +1092,13 @@ input[type="range"]::-moz-range-thumb {
 
 .settings-group {
   border: none;
-  padding: 14px 0 0;
+  padding: 16px 0 0;
   margin: 0;
+}
+
+.settings-group + .settings-group {
+  margin-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
 }
 
 .settings-group legend {
@@ -1094,6 +1147,13 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   color: var(--accent-strong);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--accent), 0 2px 8px var(--accent-ring);
+}
+
+/* Selection is also marked with a leading check, not color alone. */
+.pill:has(input:checked) span::before {
+  content: "✓ ";
 }
 
 .pill:has(input:focus-visible) {
@@ -1158,6 +1218,52 @@ input[type="range"]::-moz-range-thumb {
 
 .ghost-btn.danger:hover {
   background: color-mix(in srgb, var(--bad) 14%, var(--surface));
+}
+
+/* Destructive actions live in their own clearly separated zone. */
+.settings-danger {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--bad) 45%, transparent);
+}
+
+.settings-danger-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--bad);
+  margin-bottom: 4px;
+}
+
+/* About tab */
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.about-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.about-hero .app-version {
+  font-size: 1.05rem;
+}
+
+.about-tagline {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.about-blurb {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 60ch;
 }
 
 .settings-about {
@@ -1269,13 +1375,6 @@ input[type="range"]::-moz-range-thumb {
 @keyframes atm-fall {
   0% { transform: translate3d(0, -6vh, 0) rotate(0deg); }
   100% { transform: translate3d(var(--x, 0), 108vh, 0) rotate(360deg); }
-}
-
-@keyframes atm-rise {
-  0% { transform: translate3d(0, 112vh, 0); opacity: 0; }
-  12% { opacity: var(--o, 0.3); }
-  88% { opacity: var(--o, 0.3); }
-  100% { transform: translate3d(var(--x, 0), -8vh, 0); opacity: 0; }
 }
 
 /* Spring: a gentle side-to-side sway while drifting down. */

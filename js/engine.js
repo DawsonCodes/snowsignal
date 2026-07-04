@@ -33,6 +33,9 @@ const DELAY_K = 45;
  * @property {number} windGustMph       peak gust (mph)
  * @property {number|null} visibilityMi min visibility (miles); null = unknown
  * @property {'overnight'|'morning'|'daytime'} stormTiming
+ * @property {'improving'|'steady'|'worsening'} morningTrend  how conditions move into the commute
+ * @property {number} peakSnowRateInHr  heaviest single-hour snowfall (inches/hour)
+ * @property {number} refreezeRisk      0..1 wet-evening → below-freezing-commute black-ice risk
  * @property {boolean} hasWinterAlert
  * @property {'advisory'|'watch'|'warning'|null} alertSeverity
  * @property {number} districtSensitivity 0..1 (0.5 = average)
@@ -72,6 +75,11 @@ function normalize(input = {}) {
     stormTiming: ["overnight", "morning", "daytime"].includes(input.stormTiming)
       ? input.stormTiming
       : "overnight",
+    morningTrend: ["improving", "steady", "worsening"].includes(input.morningTrend)
+      ? input.morningTrend
+      : "steady",
+    peakSnowRateInHr: Math.max(0, num(input.peakSnowRateInHr, 0)),
+    refreezeRisk: clamp(num(input.refreezeRisk, 0), 0, 1),
     hasWinterAlert: Boolean(input.hasWinterAlert),
     alertSeverity: ["advisory", "watch", "warning"].includes(input.alertSeverity)
       ? input.alertSeverity
@@ -119,6 +127,7 @@ export function hasMeaningfulWinterHazard(input) {
   if (x.hasWinterAlert) return true;
   if (x.snowDepthIn >= HAZARD.snowDepthIn && x.lowTempF <= HAZARD.packTempF) return true;
   if (x.windChillF <= HAZARD.windChillF) return true;
+  if (x.refreezeRisk >= 0.4) return true; // wet roads refreezing into the commute
   return false;
 }
 
@@ -134,14 +143,23 @@ const stormPresence = (x) =>
  */
 function closureFactors(x) {
   const f = [];
-  const add = (key, label, points, maxPoints, detail) => {
+  const add = (key, category, label, points, maxPoints, detail) => {
     const direction = points > 0.5 ? "positive" : points < -0.5 ? "negative" : "neutral";
-    f.push({ key, label, points: Math.round(points * 10) / 10, maxPoints, direction, detail });
+    f.push({
+      key,
+      category,
+      label,
+      points: Math.round(points * 10) / 10,
+      maxPoints,
+      direction,
+      detail,
+    });
   };
 
   // Ice risk — heaviest single lever (freezing rain closes schools on its own).
   const icePts = 30 * x.iceRisk;
   add(
+    "ice",
     "ice",
     "Freezing rain / ice risk",
     icePts,
@@ -153,10 +171,24 @@ function closureFactors(x) {
       : "Mostly snow, little ice expected"
   );
 
+  // Refreeze: wet roads from the prior evening turning to black ice by bus time.
+  const refreezePts = 10 * x.refreezeRisk;
+  add(
+    "refreeze",
+    "ice",
+    "Roads refreezing overnight",
+    refreezePts,
+    10,
+    x.refreezeRisk >= 0.5
+      ? "Wet roads likely freezing into black ice before the commute"
+      : "Little refreeze risk on the roads"
+  );
+
   // Snow during the morning commute — the decisive operational window.
   const morningPts = 25 * Math.min(1, x.morningSnowIn / 4);
   add(
     "morningCommute",
+    "snow",
     "Snow during the morning commute",
     morningPts,
     25,
@@ -169,16 +201,33 @@ function closureFactors(x) {
   const overnightPts = 20 * Math.min(1, x.overnightSnowIn / 8);
   add(
     "overnightSnow",
+    "snow",
     "Overnight snow accumulation",
     overnightPts,
     20,
     `~${round1(x.overnightSnowIn)}" expected overnight`
   );
 
+  // Snowfall intensity — a heavy burst outruns the plows even when totals are modest.
+  const ratePts = 8 * clamp((x.peakSnowRateInHr - 0.3) / 0.9, 0, 1);
+  add(
+    "snowRate",
+    "snow",
+    "Snowfall intensity",
+    ratePts,
+    8,
+    x.peakSnowRateInHr >= 0.8
+      ? `Heavy bursts near ${round1(x.peakSnowRateInHr)}"/hr — plows can't keep up`
+      : x.peakSnowRateInHr >= 0.3
+      ? `Steady snow up to ${round1(x.peakSnowRateInHr)}"/hr`
+      : "Light snowfall rates"
+  );
+
   // Storm timing (only counts when a storm is actually present).
   const timingBase = x.stormTiming === "overnight" ? 12 : x.stormTiming === "morning" ? 9 : 2;
   const timingPts = timingBase * stormPresence(x);
   add(
+    "timing",
     "timing",
     "Storm timing",
     timingPts,
@@ -190,10 +239,30 @@ function closureFactors(x) {
       : "Worst of it lands during the school day or later"
   );
 
+  // Trend into school start: a storm that ends before buses roll gives crews a
+  // window to clear; one ramping up into the commute takes that window away.
+  // Gated by storm presence so a clear day scores nothing either way.
+  const trendPts =
+    (x.morningTrend === "improving" ? -6 : x.morningTrend === "worsening" ? 6 : 0) *
+    stormPresence(x);
+  add(
+    "trend",
+    "timing",
+    "Trend into school start",
+    trendPts,
+    6,
+    x.morningTrend === "improving"
+      ? "Snow winding down before school — crews get a window to clear"
+      : x.morningTrend === "worsening"
+      ? "Conditions worsening right into the commute"
+      : "Conditions roughly steady into the morning"
+  );
+
   // Official winter alert.
   const alertPts = 12 * alertWeight(x.alertSeverity);
   add(
     "alert",
+    "alerts",
     "Official winter alert",
     alertPts,
     12,
@@ -206,6 +275,7 @@ function closureFactors(x) {
   const chillPts = 8 * clamp((10 - x.windChillF) / 25, 0, 1);
   add(
     "windChill",
+    "cold",
     "Wind chill",
     chillPts,
     8,
@@ -218,6 +288,7 @@ function closureFactors(x) {
   const gustPts = 6 * clamp((x.windGustMph - 15) / 25, 0, 1);
   add(
     "gusts",
+    "wind",
     "Wind gusts",
     gustPts,
     6,
@@ -230,6 +301,7 @@ function closureFactors(x) {
   const visPts =
     x.visibilityMi === null ? 0 : 6 * clamp((2 - x.visibilityMi) / 1.75, 0, 1);
   add(
+    "visibility",
     "visibility",
     "Low visibility",
     visPts,
@@ -245,6 +317,7 @@ function closureFactors(x) {
   const depthPts = 5 * Math.min(1, x.snowDepthIn / 12);
   add(
     "snowDepth",
+    "snow",
     "Existing snow on the ground",
     depthPts,
     5,
@@ -255,6 +328,7 @@ function closureFactors(x) {
   const probPts = 5 * x.precipProbability;
   add(
     "precipProbability",
+    "timing",
     "Precipitation probability",
     probPts,
     5,
@@ -265,6 +339,7 @@ function closureFactors(x) {
   const tempPts = 5 * clamp((34 - x.lowTempF) / 19, 0, 1);
   add(
     "temperature",
+    "cold",
     "Overnight low temperature",
     tempPts,
     5,
@@ -275,6 +350,7 @@ function closureFactors(x) {
   const areaPts = x.areaType === "rural" ? 8 : x.areaType === "urban" ? -6 : 0;
   add(
     "areaType",
+    "school",
     "Area type",
     areaPts,
     8,
@@ -295,6 +371,7 @@ function closureFactors(x) {
       : 0;
   add(
     "schoolType",
+    "school",
     "School type",
     schoolPts,
     10,
@@ -308,6 +385,7 @@ function closureFactors(x) {
   const sensPts = (x.districtSensitivity - 0.5) * 20;
   add(
     "districtSensitivity",
+    "school",
     "District snow-day tendency",
     sensPts,
     10,
@@ -322,6 +400,7 @@ function closureFactors(x) {
   const budgetPts = overBudget > 0 ? -Math.min(12, overBudget * 4) : 0;
   add(
     "snowDaysUsed",
+    "school",
     "Snow days already used",
     budgetPts,
     12,
@@ -338,6 +417,11 @@ function rawDelayScore(x) {
   let s = 0;
   s += 25 * Math.min(1, x.morningSnowIn / 3); // morning snow dominates delays
   s += 22 * x.iceRisk; // morning ice → delay to let crews treat roads
+  s += 14 * x.refreezeRisk; // black ice that melts by mid-morning is the textbook delay
+  // A storm winding down before school start favors "open two hours late" over a
+  // closure; one worsening into the commute pushes toward closing outright.
+  if (x.morningTrend === "improving") s += 6 * stormPresence(x);
+  s += 3 * clamp((x.peakSnowRateInHr - 0.3) / 0.9, 0, 1);
   // Timing matters inversely vs closure: a storm that hits/clears in the morning
   // is the textbook delay; an overnight storm that ends early still needs cleanup.
   // Gated by storm presence so a clear day scores no timing points.
@@ -380,6 +464,21 @@ function computeConfidence(x, closurePct) {
   // Extreme, unambiguous conditions.
   if (x.iceRisk >= 0.66 || x.overnightSnowIn >= 10) c += 0.1;
 
+  // Rain-vs-snow-vs-ice is genuinely hard to call right at the freezing line: a
+  // partial ice signal with temps hovering near 32°F could break either way.
+  if (x.lowTempF >= 28 && x.lowTempF <= 35 && x.iceRisk >= 0.15 && x.iceRisk < 0.7) {
+    c -= 0.1;
+  }
+
+  // Several independent strong signals agreeing → a clearer-cut setup.
+  const strongSignals =
+    (x.overnightSnowIn >= 6 ? 1 : 0) +
+    (x.morningSnowIn >= 2 ? 1 : 0) +
+    (x.iceRisk >= 0.5 ? 1 : 0) +
+    (x.hasWinterAlert ? 1 : 0) +
+    (x.windChillF <= -10 ? 1 : 0);
+  if (strongSignals >= 3) c += 0.1;
+
   // The mushy middle is inherently uncertain.
   if (closurePct >= 40 && closurePct <= 60) c -= 0.2;
 
@@ -389,6 +488,24 @@ function computeConfidence(x, closurePct) {
   const score = clamp(c, 0.05, 0.95);
   const label = score < 0.4 ? "low" : score < 0.7 ? "medium" : "high";
   return { confidence: label, confidenceScore: Math.round(score * 100) / 100 };
+}
+
+/**
+ * Pick the top plain-language drivers: up to three factors that raised the
+ * estimate the most, plus the single biggest thing holding it down. Gives the
+ * UI a scannable "why" without dumping every number.
+ */
+function buildDrivers(factors) {
+  const raising = factors
+    .filter((f) => f.points >= 3)
+    .sort((a, b) => b.points - a.points)
+    .slice(0, 3)
+    .map((f) => f.detail);
+  const reducer = factors
+    .filter((f) => f.points <= -3)
+    .sort((a, b) => a.points - b.points)[0];
+  if (reducer) raising.push(reducer.detail);
+  return raising;
 }
 
 function buildRecommendation(closurePct, delayPct, confidence) {
@@ -456,6 +573,7 @@ export function predictSnowDay(input) {
   const recommendation = gated
     ? "No winter-weather hazard in the forecast window, so school should be open and on time."
     : buildRecommendation(closurePct, delayPct, confidence);
+  const drivers = gated ? [] : buildDrivers(factors);
 
   return {
     closurePct,
@@ -463,6 +581,7 @@ export function predictSnowDay(input) {
     confidence,
     confidenceScore,
     recommendation,
+    drivers,
     factors,
     gated,
     gateReason,

@@ -12,8 +12,8 @@ deploys to GitHub Pages as-is. The only third-party calls are Open-Meteo (weathe
 geocoding), the NWS alerts API (U.S. only), and BigDataCloud's free, keyless
 reverse-geocode endpoint for friendly "My location" labels.
 
-> **Status:** seasonal-polish beta (`v1.0.0-beta.4`) — not a stable release. See
-> [Versioning](#versioning), [CHANGELOG.md](CHANGELOG.md), and [ROADMAP.md](ROADMAP.md).
+> **Status:** stable release (`v1.0.0`). See [Versioning](#versioning),
+> [CHANGELOG.md](CHANGELOG.md), and [ROADMAP.md](ROADMAP.md).
 > The GitHub Pages URL is served from the `/snowsignal/` project subpath and all asset
 > paths are relative so the app keeps working there.
 
@@ -61,10 +61,17 @@ than a black box.
 - **Closure %** — weighted sum of all factors, scaled and capped at 99%. A small, isolated
   `hasMeaningfulWinterHazard()` gate forces both the closure and delay to **0%** when the forecast
   window holds no real winter hazard, so the score stays honest in benign weather.
-- **Delay %** — a separate profile that favors morning-timed storms that clear; it's suppressed when a
-  full closure is already likely (a district would just close instead).
-- **Confidence** — reflects how *clear-cut the inputs are* (alert agreement, precip certainty, whether
-  the result sits in a mushy middle), **not** a probability that the estimate is correct.
+- **Timing-aware** — beyond raw totals, the engine reads the *shape* of the storm: a wet evening
+  refreezing into black ice by bus time, a storm winding down before school (crews get a clearing
+  window) vs. worsening into the commute, and heavy hourly bursts that outrun the plows.
+- **Delay %** — a separate profile that favors morning-timed storms that clear and refreeze
+  mornings; it's suppressed when a full closure is already likely (a district would just close
+  instead).
+- **Confidence** — reflects how *clear-cut the inputs are* (alert agreement, precip certainty,
+  rain-vs-snow ambiguity near freezing, whether several strong signals agree, whether the result
+  sits in a mushy middle), **not** a probability that the estimate is correct.
+- **Drivers** — every result lists the top few plain-language reasons behind the number, including
+  the biggest factor holding it down.
 
 The weights live at the top of `js/engine.js` and are documented inline so you can tune them.
 
@@ -151,14 +158,14 @@ Notes:
 
 ## Versioning
 
-This is **`v1.0.0-beta.4`** — a **seasonal-polish beta** (the last planned visual-polish release for
-a while), still not a stable release. `beta.1` was the first public beta of the rebuilt app;
-`beta.2`–`beta.4` keep the same transparent prediction engine. `beta.4` adds the Seasonal palette
-system with location-aware Auto and safe accent ranges, subtle time-of-day ambient intensity, refined
-per-season atmosphere, Settings-tab motion polish, smoother/subtler hourly-forecast scrolling, and a
-clearer seasonal empty state. Please keep treating predictions as estimates while the engine is tuned
-against real outcomes. Full notes are in [CHANGELOG.md](CHANGELOG.md); the road to a stable `v1.0.0`
-and beyond is in [ROADMAP.md](ROADMAP.md).
+This is **`v1.0.0`** — the first **stable release**. The `beta.1`–`beta.4` line rebuilt the
+app module by module and polished it release over release; `v1.0.0` finishes the job with a
+smarter engine (refreeze/black-ice detection, trend into the commute, snowfall intensity,
+sharper confidence, plain-language drivers), a finished UI, and a full accessibility and
+compatibility pass. Stable still means *estimate*: SnowSignal can't know local policies or an
+administrator's 5 AM judgment call, so always rely on official announcements. Full notes,
+including all beta history, are in [CHANGELOG.md](CHANGELOG.md); ideas for `v1.1+` live in
+[ROADMAP.md](ROADMAP.md).
 
 ## Attribution
 

@@ -88,6 +88,92 @@ test("hourly timeline returns capped, well-formed entries", () => {
   }
 });
 
+// --- v1 mapping refinements -------------------------------------------------
+
+/** Build a minimal 2-day hourly forecast (inch units) with per-hour overrides. */
+function syntheticForecast(overrides = {}) {
+  const time = [];
+  for (const day of ["2026-01-09", "2026-01-10"]) {
+    for (let h = 0; h < 24; h++) time.push(`${day}T${String(h).padStart(2, "0")}:00`);
+  }
+  const zeros = () => time.map(() => 0);
+  const hourly = {
+    time,
+    snowfall: zeros(),
+    precipitation: zeros(),
+    precipitation_probability: time.map(() => 50),
+    temperature_2m: time.map(() => 30),
+    apparent_temperature: time.map(() => 25),
+    windspeed_10m: zeros(),
+    windgusts_10m: zeros(),
+    visibility: time.map(() => 16000),
+    snow_depth: zeros(),
+    weathercode: time.map(() => 3),
+  };
+  for (const [field, byTime] of Object.entries(overrides)) {
+    for (const [iso, value] of Object.entries(byTime)) {
+      const i = time.indexOf(iso);
+      if (i >= 0) hourly[field][i] = value;
+    }
+  }
+  return {
+    hourly,
+    hourly_units: { snowfall: "inch", precipitation: "inch", temperature_2m: "°F", visibility: "m", snow_depth: "m" },
+    daily: { temperature_2m_min: [28, 28] },
+  };
+}
+
+test("boundary hours are not double-counted across windows", () => {
+  // Snow ONLY in the 5 AM hour → it belongs to the commute window, not overnight.
+  const f = syntheticForecast({ snowfall: { "2026-01-10T05:00": 1.0 } });
+  const input = mapForecastToEngineInput(f, { now: EVENING });
+  assert.equal(input.morningSnowIn, 1.0);
+  assert.equal(input.overnightSnowIn, 0);
+});
+
+test("peak snow rate reports the heaviest single hour", () => {
+  const f = syntheticForecast({
+    snowfall: { "2026-01-10T02:00": 0.3, "2026-01-10T03:00": 1.1, "2026-01-10T06:00": 0.4 },
+  });
+  const input = mapForecastToEngineInput(f, { now: EVENING });
+  assert.equal(input.peakSnowRateInHr, 1.1);
+});
+
+test("morning trend: storm ending overnight reads as improving", () => {
+  const f = syntheticForecast({
+    snowfall: { "2026-01-09T20:00": 1.5, "2026-01-09T22:00": 1.5, "2026-01-10T00:00": 1.0 },
+  });
+  const input = mapForecastToEngineInput(f, { now: EVENING });
+  assert.equal(input.morningTrend, "improving");
+});
+
+test("morning trend: snow ramping into the commute reads as worsening", () => {
+  const f = syntheticForecast({
+    snowfall: { "2026-01-10T02:00": 0.1, "2026-01-10T06:00": 0.8, "2026-01-10T07:00": 0.9 },
+  });
+  const input = mapForecastToEngineInput(f, { now: EVENING });
+  assert.equal(input.morningTrend, "worsening");
+});
+
+test("refreeze risk: evening rain then a hard-freezing commute", () => {
+  const f = syntheticForecast({
+    precipitation: { "2026-01-09T17:00": 0.15, "2026-01-09T18:00": 0.1 },
+    temperature_2m: {
+      "2026-01-09T17:00": 41,
+      "2026-01-09T18:00": 39,
+      "2026-01-10T05:00": 26,
+      "2026-01-10T06:00": 25,
+      "2026-01-10T07:00": 26,
+      "2026-01-10T08:00": 27,
+    },
+  });
+  const input = mapForecastToEngineInput(f, { now: EVENING });
+  assert.ok(input.refreezeRisk >= 0.6, `refreezeRisk ${input.refreezeRisk}`);
+  // A dry evening produces no refreeze risk even with a cold morning.
+  const dry = syntheticForecast({ temperature_2m: { "2026-01-10T06:00": 25 } });
+  assert.equal(mapForecastToEngineInput(dry, { now: EVENING }).refreezeRisk, 0);
+});
+
 test("summarizeWinterAlerts picks the most severe winter event, filters non-winter", () => {
   const summary = summarizeWinterAlerts(nwsAlert);
   assert.equal(summary.hasWinterAlert, true);

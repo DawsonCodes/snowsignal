@@ -1,6 +1,6 @@
 {
   "name": "snowsignal",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0",
   "description": "SnowSignal — a transparent, free, static snow-day and school-delay predictor powered by Open-Meteo.",
   "type": "module",
   "private": true,

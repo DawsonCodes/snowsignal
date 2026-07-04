@@ -38,7 +38,7 @@ import * as ui from "./ui.js";
 
 const { $ } = ui;
 
-const APP_VERSION = "1.0.0-beta.4";
+const APP_VERSION = "1.0.0";
 
 // The last user action, so the error-state Retry button can re-run it.
 let lastAction = null;
@@ -742,6 +742,17 @@ function init() {
   $("retry-btn").addEventListener("click", () => {
     if (lastAction) lastAction();
     else if (state.place) loadPlace(state.place);
+  });
+
+  // "/" focuses the search box from anywhere outside a text field or the modal.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    const typing =
+      t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA");
+    if (typing || !$("settings-panel").hidden) return;
+    e.preventDefault();
+    $("location").focus();
   });
 
   // Desktop-only hourly scroll arrows (touch users swipe; smooth via CSS).

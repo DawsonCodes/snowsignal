@@ -235,8 +235,9 @@ test("gate: an unusual out-of-season snow/ice event is NOT blocked by the month"
   assert.ok(freakIce.closurePct > 0);
 });
 
-test("factor breakdown exposes proportional bar data", () => {
+test("factor breakdown exposes proportional bar data with categories", () => {
   const r = predictSnowDay(baseInput({ iceRisk: 0.5 }));
+  const CATEGORIES = ["snow", "ice", "cold", "wind", "visibility", "alerts", "timing", "school"];
   for (const f of r.factors) {
     assert.equal(typeof f.key, "string");
     assert.equal(typeof f.label, "string");
@@ -244,5 +245,84 @@ test("factor breakdown exposes proportional bar data", () => {
     assert.ok(f.maxPoints > 0);
     assert.ok(["positive", "negative", "neutral"].includes(f.direction));
     assert.equal(typeof f.detail, "string");
+    assert.ok(CATEGORIES.includes(f.category), `unknown category ${f.category}`);
   }
+});
+
+// --- v1 engine refinements -------------------------------------------------
+
+test("refreeze risk raises closure, feeds delay, and passes the hazard gate", () => {
+  const dry = predictSnowDay(baseInput({ overnightSnowIn: 0, morningSnowIn: 0, precipProbability: 0.2 }));
+  const refreeze = predictSnowDay(
+    baseInput({ overnightSnowIn: 0, morningSnowIn: 0, precipProbability: 0.2, refreezeRisk: 0.8 })
+  );
+  assert.ok(refreeze.closurePct > dry.closurePct, "refreeze adds closure risk");
+  assert.ok(refreeze.delayPct > dry.delayPct, "black ice is a classic delay driver");
+  // Wet-then-freezing roads alone are a real winter hazard (not gated to zero).
+  assert.equal(hasMeaningfulWinterHazard({ lowTempF: 30, refreezeRisk: 0.6 }), true);
+  assert.equal(hasMeaningfulWinterHazard({ lowTempF: 40, refreezeRisk: 0.2 }), false);
+});
+
+test("a storm improving before school lowers closure; worsening raises it", () => {
+  const steady = predictSnowDay(baseInput({ overnightSnowIn: 4, morningTrend: "steady" }));
+  const improving = predictSnowDay(baseInput({ overnightSnowIn: 4, morningTrend: "improving" }));
+  const worsening = predictSnowDay(baseInput({ overnightSnowIn: 4, morningTrend: "worsening" }));
+  assert.ok(improving.closurePct < steady.closurePct, "improving trend reduces closure");
+  assert.ok(worsening.closurePct > steady.closurePct, "worsening trend increases closure");
+  // Improving before school start is the textbook 2-hour-delay setup.
+  assert.ok(improving.delayPct >= steady.delayPct, "improving trend favors a delay");
+});
+
+test("trend has no effect on a clear day (gated by storm presence)", () => {
+  const clear = { overnightSnowIn: 0, morningSnowIn: 0, iceRisk: 0, precipProbability: 0.1, lowTempF: 20, windChillF: 12 };
+  const a = predictSnowDay(baseInput({ ...clear, morningTrend: "worsening" }));
+  const b = predictSnowDay(baseInput({ ...clear, morningTrend: "steady" }));
+  assert.equal(a.closurePct, b.closurePct);
+});
+
+test("heavy snowfall bursts score higher than the same total spread thin", () => {
+  const thin = predictSnowDay(baseInput({ overnightSnowIn: 3, peakSnowRateInHr: 0.2 }));
+  const burst = predictSnowDay(baseInput({ overnightSnowIn: 3, peakSnowRateInHr: 1.2 }));
+  assert.ok(burst.closurePct > thin.closurePct);
+});
+
+test("confidence drops when precip type is ambiguous near freezing", () => {
+  // Same partial ice signal, differing ONLY in temperature: unambiguous cold vs
+  // hovering right at the freezing line. Inputs are tuned so both land in the
+  // same closure band (30–40%), isolating the ambiguity term.
+  const scenario = { overnightSnowIn: 0.55, iceRisk: 0.4, windChillF: 26 };
+  const coldSnow = predictSnowDay(baseInput({ ...scenario, lowTempF: 20 }));
+  const nearFreezing = predictSnowDay(baseInput({ ...scenario, lowTempF: 32 }));
+  assert.ok(coldSnow.closurePct >= 30 && coldSnow.closurePct < 40, `cold ${coldSnow.closurePct}`);
+  assert.ok(nearFreezing.closurePct >= 30 && nearFreezing.closurePct < 40, `near ${nearFreezing.closurePct}`);
+  assert.ok(nearFreezing.confidenceScore < coldSnow.confidenceScore);
+});
+
+test("several strong agreeing signals raise confidence", () => {
+  const weak = predictSnowDay(baseInput({ overnightSnowIn: 2 }));
+  const strong = predictSnowDay(
+    baseInput({
+      overnightSnowIn: 12,
+      morningSnowIn: 3,
+      iceRisk: 0.6,
+      hasWinterAlert: true,
+      alertSeverity: "warning",
+      precipProbability: 1,
+    })
+  );
+  assert.ok(strong.confidenceScore > weak.confidenceScore);
+});
+
+test("drivers list the top plain-language reasons, empty when gated", () => {
+  const storm = predictSnowDay(
+    baseInput({ overnightSnowIn: 8, morningSnowIn: 3, iceRisk: 0.5, schoolType: "college" })
+  );
+  assert.ok(Array.isArray(storm.drivers));
+  assert.ok(storm.drivers.length >= 2 && storm.drivers.length <= 4);
+  for (const d of storm.drivers) assert.equal(typeof d, "string");
+  // The biggest risk-reducer (college) is surfaced too.
+  assert.ok(storm.drivers.some((d) => /college/i.test(d)), "includes the top reducer");
+
+  const gated = predictSnowDay(warmDay());
+  assert.deepEqual(gated.drivers, []);
 });
