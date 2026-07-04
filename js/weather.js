@@ -125,14 +125,19 @@ function pickWindows(entries, now) {
   }
   const prevDate = shiftDate(targetDate, -1);
 
-  const morning = entries.filter((e) => e.date === targetDate && e.hour >= 5 && e.hour <= 9);
+  // Disjoint buckets so boundary hours are never double-counted:
+  //   overnight = 6 PM prior evening through 4:59 AM, morning commute = 5–8:59 AM,
+  //   daytime = 9 AM–5 PM. (Pre-v1 the 5 AM and 9 AM hours landed in two buckets.)
+  const morning = entries.filter((e) => e.date === targetDate && e.hour >= 5 && e.hour < 9);
   const overnight = entries.filter(
     (e) =>
-      (e.date === prevDate && e.hour >= 18) || (e.date === targetDate && e.hour <= 5)
+      (e.date === prevDate && e.hour >= 18) || (e.date === targetDate && e.hour < 5)
   );
   const daytime = entries.filter((e) => e.date === targetDate && e.hour >= 9 && e.hour <= 17);
+  // Prior evening (~3–11 PM), used for the wet-then-freezing refreeze signal.
+  const evening = entries.filter((e) => e.date === prevDate && e.hour >= 15);
 
-  return { morning, overnight, daytime, targetDate };
+  return { morning, overnight, daytime, evening, targetDate };
 }
 
 function iceFromWeatherCode(code) {
@@ -159,7 +164,7 @@ export function mapForecastToEngineInput(forecast, { now, schoolContext = {} } =
   const times = hourly.time || [];
 
   const entries = times.map(parseEntry);
-  const { morning, overnight, daytime } = pickWindows(entries, now ?? new Date());
+  const { morning, overnight, daytime, evening } = pickWindows(entries, now ?? new Date());
 
   const get = (arr, i) => (Array.isArray(arr) && Number.isFinite(arr[i]) ? arr[i] : null);
 
@@ -236,6 +241,47 @@ export function mapForecastToEngineInput(forecast, { now, schoolContext = {} } =
     }
   }
 
+  // Peak hourly snow rate over the event window — a 1"/hr burst is far more
+  // disruptive than the same total spread thinly, and plows can't keep up.
+  let peakSnowRateInHr = 0;
+  for (const e of eventIdxs) {
+    peakSnowRateInHr = Math.max(
+      peakSnowRateInHr,
+      toInchesSnow(get(hourly.snowfall, e.i) ?? 0, units.snowfall)
+    );
+  }
+
+  // Morning trend: is the snow ending before buses roll, or ramping up into the
+  // commute? Compare average rates (overnight ≈ 11 h, commute = 4 h).
+  const overnightRate = overnightSnowIn / Math.max(1, overnight.length);
+  const morningRate = morningSnowIn / Math.max(1, morning.length);
+  let morningTrend = "steady";
+  if (overnightSnowIn >= 0.5 && morningRate < overnightRate * 0.25) {
+    morningTrend = "improving"; // storm winding down before school start
+  } else if (morningSnowIn >= 0.3 && morningRate > overnightRate * 1.5) {
+    morningTrend = "worsening"; // ramping up right into the commute
+  }
+
+  // Refreeze risk: a wet prior evening followed by a below-freezing commute
+  // leaves untreated black ice even with little or no new precipitation.
+  let refreezeRisk = 0;
+  const eveningWet = evening.reduce((s, e) => {
+    const precip = get(hourly.precipitation, e.i) ?? 0;
+    const snow = toInchesSnow(get(hourly.snowfall, e.i) ?? 0, units.snowfall);
+    const tF = tempToF(get(hourly.temperature_2m, e.i) ?? 32, units.temperature_2m);
+    // Count liquid-ish precipitation that fell above freezing (wet roads).
+    return s + (tF > 33 && precip > snow * 0.5 ? precip : 0);
+  }, 0);
+  let morningMinF = Infinity;
+  for (const e of morning) {
+    const tF = tempToF(get(hourly.temperature_2m, e.i), units.temperature_2m);
+    if (tF !== null) morningMinF = Math.min(morningMinF, tF);
+  }
+  if (Number.isFinite(morningMinF)) {
+    if (eveningWet >= 0.15 && morningMinF <= 28) refreezeRisk = 0.8;
+    else if (eveningWet >= 0.05 && morningMinF <= 30) refreezeRisk = 0.6;
+  }
+
   return {
     overnightSnowIn,
     morningSnowIn,
@@ -247,6 +293,9 @@ export function mapForecastToEngineInput(forecast, { now, schoolContext = {} } =
     windGustMph,
     visibilityMi, // may be null → engine flags lower confidence
     stormTiming,
+    morningTrend,
+    peakSnowRateInHr,
+    refreezeRisk: clamp(refreezeRisk, 0, 1),
     // user-controlled context (alerts merged in by the caller):
     hasWinterAlert: Boolean(schoolContext.hasWinterAlert),
     alertSeverity: schoolContext.alertSeverity ?? null,
