@@ -43,7 +43,7 @@ official closure data — client-only, no tracking, MIT licensed.
 See [CHANGELOG.md](CHANGELOG.md).
 
 ## v1.1.0
-- Optional **local** outcome feedback ("was school actually closed?") stored only on-device
+- Optional **local** outcome feedback ("was school actually closed?")
 - Location-specific calibration informed by that local feedback
 - Settings polish and clearer defaults
 - A plain-language privacy explanation in the UI
